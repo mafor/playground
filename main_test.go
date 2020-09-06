@@ -1,20 +1,50 @@
 package main
 
 import (
+	"os"
 	"testing"
 )
 
-// GORM_REPO: https://github.com/go-gorm/gorm.git
-// GORM_BRANCH: master
-// TEST_DRIVERS: sqlite, mysql, postgres, sqlserver
+type Parent struct {
+	FirstName string `gorm:"primaryKey"`
+	LastName  string `gorm:"primaryKey"`
+}
 
-func TestGORM(t *testing.T) {
-	user := User{Name: "jinzhu"}
+type Child struct {
+	ParentFirstName string
+	ParentLastName  string
+	Parent          Parent `gorm:"ForeignKey: ParentFirstName,ParentLastName; References: FirstName, LastName"`
+}
 
-	DB.Create(&user)
+func TestMain(m *testing.M) {
 
-	var result User
-	if err := DB.First(&result, user.ID).Error; err != nil {
+	DB.AutoMigrate(&Parent{}, &Child{})
+	DB.Create(&Child{Parent: Parent{"John", "Black"}})
+	DB.Create(&Child{Parent: Parent{"Tom", "White"}})
+
+	result := m.Run()
+
+	DB.Debug().Exec("DELETE FROM children")
+	DB.Debug().Exec("DELETE FROM parents")
+	os.Exit(result)
+}
+
+func TestPreloadWithCompositeFK(t *testing.T) {
+
+	var children []Child
+	if err := DB.Preload("Parent").Find(&children).Error; err != nil {
+		t.Errorf("Failed, got error: %v", err)
+	}
+}
+
+func TestWhereInClauseWithCompositeFK(t *testing.T) {
+
+	var parents []Parent
+	var params = [][]string{
+		[]string{"John", "Black"},
+		[]string{"Tom", "White"},
+	}
+	if err := DB.Where("(first_name, last_name) IN ?", params).Find(&parents).Error; err != nil {
 		t.Errorf("Failed, got error: %v", err)
 	}
 }
